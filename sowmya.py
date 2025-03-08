@@ -1,22 +1,16 @@
 import streamlit as st
 import numpy as np
-from PIL import Image, ImageOps
+from PIL import Image
 import difflib
 
-# Try importing OCR and PDF libraries
-try:
-    import pytesseract
-    OCR_AVAILABLE = True
-except ImportError:
-    OCR_AVAILABLE = False
-
+# Try importing PDF library
 try:
     import pdfplumber
     PDF_AVAILABLE = True
 except ImportError:
     PDF_AVAILABLE = False
 
-# Function to extract text from PDF or Image
+# Function to extract text from PDF
 def extract_text(file):
     text = ""
     try:
@@ -24,17 +18,13 @@ def extract_text(file):
             with pdfplumber.open(file) as pdf:
                 text = "\n".join(page.extract_text() or "" for page in pdf.pages)
                 
-                # If no text is found, attempt OCR on each page
-                if not text.strip() and OCR_AVAILABLE:
-                    text = "\n".join(pytesseract.image_to_string(page.to_image().to_pil()) for page in pdf.pages)
-                
-        elif OCR_AVAILABLE:  # Process as an image if OCR is available
-            image = Image.open(file)
-            text = pytesseract.image_to_string(image)
+                # If no text is found, notify the user
+                if not text.strip():
+                    return "No extractable text found in the PDF."
         else:
-            st.warning("OCR (Tesseract) not available. Text extraction may not work.")
+            return "Unsupported file type or missing required libraries."
     except Exception as e:
-        st.error(f"Error extracting text: {e}")
+        return f"Error extracting text: {e}"
     return text
 
 # Function to compare text and highlight differences
@@ -56,7 +46,7 @@ def verify_certificate(extracted_text, reference_text):
 # Streamlit UI
 st.title("📜 Certificate & Document Verification Tool")
 
-uploaded_file = st.file_uploader("Upload a PDF or Image", type=["pdf", "png", "jpg", "jpeg"])
+uploaded_file = st.file_uploader("Upload a PDF", type=["pdf"])
 if uploaded_file:
     st.subheader("Extracted Text from Document")
     extracted_text = extract_text(uploaded_file)
