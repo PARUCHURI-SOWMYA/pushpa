@@ -3,105 +3,74 @@ import numpy as np
 from PIL import Image, ImageOps
 import difflib
 
-# Attempt to import libraries and handle missing ones
 try:
     import pytesseract
-    import fitz  # PyMuPDF for PDF handling
     from skimage.filters import sobel
-    import cv2
-    import pyzbar.pyzbar as pyzbar  # For QR code scanning
-    LIBS_AVAILABLE = True
-except ImportError:
-    LIBS_AVAILABLE = False
+    import fitz  # PyMuPDF
+except ImportError as e:
+    st.warning(f"Missing Library: {e}. Some features may not work.")
 
-# Function to process image
 def process_image(image, mode):
-    if not LIBS_AVAILABLE:
-        return image
     img = ImageOps.grayscale(image)
     img_array = np.array(img)
-    
     if mode == "Grayscale":
         return img
     elif mode == "Edge Detection":
         edges = sobel(img_array)
         return Image.fromarray((edges * 255).astype(np.uint8))
     elif mode == "Color Inversion":
-        return ImageOps.invert(image.convert("RGB"))
+        inverted_img = ImageOps.invert(image.convert("RGB"))
+        return inverted_img
     return image
 
-# Function to extract text
 def extract_text(image):
-    if LIBS_AVAILABLE:
+    try:
         return pytesseract.image_to_string(image)
-    return "Text extraction unavailable due to missing libraries."
+    except:
+        return "Text extraction not available."
 
-# Function to compare text
 def compare_text(original, modified):
     diff = difflib.ndiff(original.split(), modified.split())
     changes = '\n'.join([word for word in diff if word.startswith('+ ') or word.startswith('- ')])
     return changes if changes else "No modifications detected."
 
-# Function to extract images from PDF
-def extract_pdf_images(pdf_file):
-    if not LIBS_AVAILABLE:
-        return []
-    images = []
-    try:
-        with fitz.open(pdf_file) as doc:
-            for page in doc:
-                pix = page.get_pixmap()
-                img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-                images.append(img)
-    except Exception as e:
-        st.error(f"Error processing PDF: {e}")
-    return images
+def verify_certificate(text, reference_text):
+    return "Certificate is ORIGINAL." if text == reference_text else "Certificate is FAKE! Details mismatch."
 
-# Function to scan QR codes
-def scan_qr_code(image):
-    if not LIBS_AVAILABLE:
-        return "QR code scanning unavailable."
-    img_array = np.array(image.convert("RGB"))
-    decoded_objects = pyzbar.decode(img_array)
-    if decoded_objects:
-        return '\n'.join([obj.data.decode("utf-8") for obj in decoded_objects])
-    return "No QR code detected."
-
-# Streamlit UI
 st.title("📄 Digital Document Authenticator and Verification Tool")
 
 uploaded_file = st.file_uploader("Upload a document (Image/PDF)", type=["png", "jpg", "jpeg", "pdf"])
 
 if uploaded_file:
-    if uploaded_file.name.endswith(".pdf"):
-        pdf_images = extract_pdf_images(uploaded_file)
-        if pdf_images:
-            selected_page = st.selectbox("Select Page to Process", list(range(1, len(pdf_images) + 1)))
-            image = pdf_images[selected_page - 1]
-        else:
-            st.error("No images found in PDF.")
+    file_type = uploaded_file.name.split(".")[-1].lower()
+    if file_type == "pdf":
+        try:
+            doc = fitz.open(stream=uploaded_file.read(), filetype="pdf")
+            pages = [page.get_pixmap() for page in doc]
+            images = [Image.frombytes("RGB", [p.width, p.height], p.samples) for p in pages]
+            selected_page = st.selectbox("Select a page for verification", list(range(1, len(images) + 1)))
+            image = images[selected_page - 1]
+        except:
+            st.error("PDF processing not available.")
             image = None
     else:
         image = Image.open(uploaded_file)
-    
+
     if image:
-        st.image(image, caption="Uploaded Document", use_column_width=True)
-        
+        st.image(image, caption="Selected Document Page", use_column_width=True)
         mode = st.selectbox("Select Image Processing Mode", ["Original", "Grayscale", "Edge Detection", "Color Inversion"])
         processed_img = process_image(image, mode)
         st.image(processed_img, caption=f"{mode} Output", use_column_width=True)
-        
         extracted_text = extract_text(image)
         st.subheader("Extracted Text")
-        st.text_area("Text from Image", extracted_text, height=200)
-        
+        st.text_area("Text from Document", extracted_text, height=200)
         original_text = st.text_area("Paste Original Text for Verification", height=200)
         if st.button("Verify Text Authenticity") and original_text:
             differences = compare_text(original_text, extracted_text)
             st.subheader("Text Differences")
             st.text_area("Detected Changes", differences, height=200)
-        
-        # QR Code Verification
-        st.subheader("QR Code Verification")
-        qr_code_data = scan_qr_code(image)
-        st.text_area("Scanned QR Code Data", qr_code_data, height=100)
+        if st.button("Verify Certificate Authenticity"):
+            reference_text = st.text_area("Enter Expected Certificate Details", height=200)
+            result = verify_certificate(extracted_text, reference_text)
+            st.subheader("Certificate Verification Result")
+            st.write(result)
