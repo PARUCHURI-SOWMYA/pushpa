@@ -7,11 +7,22 @@ try:
 except ImportError:
     pdfplumber = None
 
+try:
+    from pdf2image import convert_from_bytes
+except ImportError:
+    convert_from_bytes = None
+
 # Function to extract text from a PDF and split into pages
 def extract_text_from_pdf(file):
     if pdfplumber:
         with pdfplumber.open(file) as pdf:
             return [page.extract_text() or "" for page in pdf.pages]
+    return []
+
+# Function to extract images from a PDF page
+def extract_images_from_pdf(file):
+    if convert_from_bytes:
+        return convert_from_bytes(file.read(), fmt='png')
     return []
 
 # Function to apply image transformations
@@ -43,16 +54,22 @@ st.title("📜 Certificate & Document Verification Tool")
 uploaded_file = st.file_uploader("Upload a PDF", type=["pdf"])
 if uploaded_file:
     pages_text = extract_text_from_pdf(uploaded_file)
+    images = extract_images_from_pdf(uploaded_file)
+    
     if pages_text:
         selected_page = st.selectbox("Select Page for Verification", range(1, len(pages_text) + 1))
         extracted_text = pages_text[selected_page - 1]
         st.text_area(f"Extracted Text from Page {selected_page}", extracted_text, height=200)
     
-    # Image Processing Options
-    mode = st.selectbox("Select Image Processing Mode", ["Original", "Grayscale", "Edge Detection", "Color Inversion"])
-    image = Image.new('RGB', (400, 300), (255, 255, 255))  # Placeholder image
-    processed_image = process_image(image, mode)
-    st.image(processed_image, caption=f"{mode} Output", use_container_width=True)
+    if images:
+        selected_image = images[selected_page - 1] if selected_page <= len(images) else None
+        if selected_image:
+            st.image(selected_image, caption=f"Page {selected_page} Image", use_container_width=True)
+            
+            # Image Processing Options
+            mode = st.selectbox("Select Image Processing Mode", ["Original", "Grayscale", "Edge Detection", "Color Inversion"])
+            processed_image = process_image(selected_image, mode)
+            st.image(processed_image, caption=f"{mode} Output", use_container_width=True)
     
     doc_type = st.radio("Select Document Type", ["General Document", "Certificate Verification"])
     if doc_type == "General Document":
