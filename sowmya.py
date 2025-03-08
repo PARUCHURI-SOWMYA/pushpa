@@ -1,6 +1,6 @@
 import streamlit as st
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageOps
 import difflib
 
 # Try importing PDF library
@@ -9,6 +9,13 @@ try:
     PDF_AVAILABLE = True
 except ImportError:
     PDF_AVAILABLE = False
+
+# Try importing OCR library
+try:
+    import pytesseract
+    OCR_AVAILABLE = True
+except ImportError:
+    OCR_AVAILABLE = False
 
 # Function to extract text from PDF
 def extract_text(file):
@@ -28,6 +35,30 @@ def extract_text(file):
         return f"Error extracting text: {e}"
     return text
 
+# Function to extract images from PDF
+def extract_images(file):
+    images = []
+    try:
+        if PDF_AVAILABLE:
+            with pdfplumber.open(file) as pdf:
+                for page in pdf.pages:
+                    for img in page.images:
+                        image = page.to_image()
+                        images.append(image.original)
+    except Exception as e:
+        st.error(f"Error extracting images: {e}")
+    return images
+
+# Function to apply image transformations
+def process_image(image, mode):
+    if mode == "Grayscale":
+        return ImageOps.grayscale(image)
+    elif mode == "Edge Detection":
+        return image.convert("L").filter(ImageFilter.FIND_EDGES)
+    elif mode == "Color Inversion":
+        return ImageOps.invert(image.convert("RGB"))
+    return image
+
 # Function to compare text and highlight differences
 def highlight_differences(original, extracted):
     diff = difflib.ndiff(original.split(), extracted.split())
@@ -40,9 +71,9 @@ def verify_certificate(extracted_text, reference_text):
         return "No text detected. Unable to verify."
     similarity = difflib.SequenceMatcher(None, extracted_text.lower(), reference_text.lower()).ratio()
     if similarity > 0.85:
-        return "Yes Certificate is Original"
+        return "✅ Certificate is Original"
     else:
-        return "No Certificate is Fake or Mismatched!"
+        return "❌ Certificate is Fake or Mismatched!"
 
 # Streamlit UI
 st.title("📜 Certificate & Document Verification Tool")
@@ -52,6 +83,19 @@ if uploaded_file:
     st.subheader("Extracted Text from Document")
     extracted_text = extract_text(uploaded_file)
     st.text_area("Extracted Text", extracted_text, height=200)
+
+    images = extract_images(uploaded_file)
+    if images:
+        st.subheader("Extracted Images from Document")
+        selected_image = st.selectbox("Select an Image to Process", range(len(images)))
+        image = images[selected_image]
+        st.image(image, caption="Original Image", use_column_width=True)
+        
+        mode = st.selectbox("Select Image Processing Mode", ["Original", "Grayscale", "Edge Detection", "Color Inversion"])
+        processed_img = process_image(image, mode)
+        st.image(processed_img, caption=f"{mode} Output", use_column_width=True)
+    else:
+        st.write("No images found in the document.")
 
     doc_type = st.radio("Select Document Type", ["General Document", "Certificate Verification"])
     if doc_type == "General Document":
