@@ -23,12 +23,16 @@ def extract_text(file):
         if file.name.endswith(".pdf") and PDF_AVAILABLE:
             with pdfplumber.open(file) as pdf:
                 text = "\n".join(page.extract_text() or "" for page in pdf.pages)
-        else:
+                
+                # If no text is found, attempt OCR on each page
+                if not text.strip() and OCR_AVAILABLE:
+                    text = "\n".join(pytesseract.image_to_string(page.to_image().to_pil()) for page in pdf.pages)
+                
+        elif OCR_AVAILABLE:  # Process as an image if OCR is available
             image = Image.open(file)
-            if OCR_AVAILABLE:
-                text = pytesseract.image_to_string(image)
-            else:
-                st.warning("OCR (Tesseract) not available. Text extraction may not work.")
+            text = pytesseract.image_to_string(image)
+        else:
+            st.warning("OCR (Tesseract) not available. Text extraction may not work.")
     except Exception as e:
         st.error(f"Error extracting text: {e}")
     return text
