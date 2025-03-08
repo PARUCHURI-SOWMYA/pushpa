@@ -2,11 +2,16 @@ import streamlit as st
 import numpy as np
 from PIL import Image, ImageOps
 import difflib
-import fitz  # PyMuPDF for PDFs
 
-# Try importing OCR library
+# Try importing required libraries and handle errors
 try:
-    import pytesseract
+    import fitz  # PyMuPDF for PDFs
+    PDF_AVAILABLE = True
+except ImportError:
+    PDF_AVAILABLE = False
+
+try:
+    import pytesseract  # OCR for text extraction
     OCR_AVAILABLE = True
 except ImportError:
     OCR_AVAILABLE = False
@@ -16,14 +21,17 @@ def extract_text(file):
     text = ""
     try:
         if file.name.endswith(".pdf"):
-            with fitz.open(stream=file.read(), filetype="pdf") as doc:
-                text = "\n".join(page.get_text("text") for page in doc)
+            if PDF_AVAILABLE:
+                with fitz.open(stream=file.read(), filetype="pdf") as doc:
+                    text = "\n".join(page.get_text("text") for page in doc)
+            else:
+                st.warning("PDF processing is not available. Install `PyMuPDF` to enable it.")
         else:
             image = Image.open(file)
             if OCR_AVAILABLE:
                 text = pytesseract.image_to_string(image)
             else:
-                st.warning("OCR (Tesseract) not available. Text extraction may not work.")
+                st.warning("OCR (Tesseract) is not available. Install `pytesseract` for text extraction.")
     except Exception as e:
         st.error(f"Error extracting text: {e}")
     return text
@@ -54,13 +62,15 @@ if uploaded_file:
     st.text_area("Extracted Text", extracted_text, height=200)
 
     doc_type = st.radio("Select Document Type", ["General Document", "Certificate Verification"])
+    
     if doc_type == "General Document":
         reference_text = st.text_area("Paste Original Text for Verification", height=200)
         if st.button("Check for Tampering"):
             differences = highlight_differences(reference_text, extracted_text)
             st.subheader("Detected Changes")
             st.text_area("Highlighted Differences", differences, height=200)
-    else:
+
+    else:  # Certificate Verification
         reference_certificate_text = st.text_area("Paste Expected Certificate Details", height=200)
         if st.button("Verify Certificate"):
             verification_result = verify_certificate(extracted_text, reference_certificate_text)
