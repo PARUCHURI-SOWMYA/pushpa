@@ -10,14 +10,9 @@ except ImportError:
 # Function to extract text from a PDF and split into pages
 def extract_text_from_pdf(file):
     if pdfplumber:
-        try:
-            with pdfplumber.open(file) as pdf:
-                pages = [page.extract_text() or "" for page in pdf.pages]
-                return pages if any(p.strip() for p in pages) else ["No text found."]
-        except Exception as e:
-            return [f"Error extracting text: {e}"]
-    else:
-        return ["PDF processing is unavailable."]
+        with pdfplumber.open(file) as pdf:
+            return [page.extract_text() or "" for page in pdf.pages]
+    return []
 
 # Function to apply image transformations
 def process_image(image, mode):
@@ -48,29 +43,27 @@ st.title("📜 Certificate & Document Verification Tool")
 uploaded_file = st.file_uploader("Upload a PDF", type=["pdf"])
 if uploaded_file:
     pages_text = extract_text_from_pdf(uploaded_file)
-    if isinstance(pages_text, list):
+    if pages_text:
         selected_page = st.selectbox("Select Page for Verification", range(1, len(pages_text) + 1))
         extracted_text = pages_text[selected_page - 1]
         st.text_area(f"Extracted Text from Page {selected_page}", extracted_text, height=200)
-        
-        # Image Processing Options
-        mode = st.selectbox("Select Image Processing Mode", ["Original", "Grayscale", "Edge Detection", "Color Inversion"])
-        image = Image.new('RGB', (400, 300), (255, 255, 255))  # Placeholder image
-        processed_image = process_image(image, mode)
-        st.image(processed_image, caption=f"{mode} Output", use_column_width=True)
-        
-        doc_type = st.radio("Select Document Type", ["General Document", "Certificate Verification"])
-        if doc_type == "General Document":
-            reference_text = st.text_area("Paste Original Text for Verification", height=200)
-            if st.button("Check for Tampering"):
-                differences = highlight_differences(reference_text, extracted_text)
-                st.subheader("Detected Changes")
-                st.text_area("Highlighted Differences", differences, height=200)
-        else:
-            reference_certificate_text = st.text_area("Paste Expected Certificate Details", height=200)
-            if st.button("Verify Certificate"):
-                verification_result = verify_certificate(extracted_text, reference_certificate_text)
-                st.subheader("Verification Result")
-                st.write(verification_result)
+    
+    # Image Processing Options
+    mode = st.selectbox("Select Image Processing Mode", ["Original", "Grayscale", "Edge Detection", "Color Inversion"])
+    image = Image.new('RGB', (400, 300), (255, 255, 255))  # Placeholder image
+    processed_image = process_image(image, mode)
+    st.image(processed_image, caption=f"{mode} Output", use_container_width=True)
+    
+    doc_type = st.radio("Select Document Type", ["General Document", "Certificate Verification"])
+    if doc_type == "General Document":
+        reference_text = st.text_area("Paste Original Text for Verification", height=200)
+        if st.button("Check for Tampering"):
+            differences = highlight_differences(reference_text, extracted_text)
+            st.subheader("Detected Changes")
+            st.text_area("Highlighted Differences", differences, height=200)
     else:
-        st.error(pages_text[0])
+        reference_certificate_text = st.text_area("Paste Expected Certificate Details", height=200)
+        if st.button("Verify Certificate"):
+            verification_result = verify_certificate(extracted_text, reference_certificate_text)
+            st.subheader("Verification Result")
+            st.write(verification_result)
