@@ -8,6 +8,8 @@ try:
     import pytesseract
     import fitz  # PyMuPDF for PDF handling
     from skimage.filters import sobel
+    import cv2
+    import pyzbar.pyzbar as pyzbar  # For QR code scanning
     LIBS_AVAILABLE = True
 except ImportError:
     LIBS_AVAILABLE = False
@@ -55,6 +57,16 @@ def extract_pdf_images(pdf_file):
         st.error(f"Error processing PDF: {e}")
     return images
 
+# Function to scan QR codes
+def scan_qr_code(image):
+    if not LIBS_AVAILABLE:
+        return "QR code scanning unavailable."
+    img_array = np.array(image.convert("RGB"))
+    decoded_objects = pyzbar.decode(img_array)
+    if decoded_objects:
+        return '\n'.join([obj.data.decode("utf-8") for obj in decoded_objects])
+    return "No QR code detected."
+
 # Streamlit UI
 st.title("📄 Digital Document Authenticator and Verification Tool")
 
@@ -88,3 +100,8 @@ if uploaded_file:
             differences = compare_text(original_text, extracted_text)
             st.subheader("Text Differences")
             st.text_area("Detected Changes", differences, height=200)
+        
+        # QR Code Verification
+        st.subheader("QR Code Verification")
+        qr_code_data = scan_qr_code(image)
+        st.text_area("Scanned QR Code Data", qr_code_data, height=100)
