@@ -3,50 +3,17 @@ import numpy as np
 from PIL import Image, ImageOps, ImageFilter
 import difflib
 
-# Try importing PDF library
-try:
-    import pdfplumber
-    PDF_AVAILABLE = True
-except ImportError:
-    PDF_AVAILABLE = False
-
-# Try importing OCR library
-try:
-    import pytesseract
-    OCR_AVAILABLE = True
-except ImportError:
-    OCR_AVAILABLE = False
-
-# Function to extract text from a specific PDF page
-def extract_text_from_page(file, page_number):
+# Function to extract text from a PDF (Basic Extraction)
+def extract_text_from_pdf(file):
     try:
-        if file.name.endswith(".pdf") and PDF_AVAILABLE:
-            with pdfplumber.open(file) as pdf:
-                if page_number < len(pdf.pages):
-                    page = pdf.pages[page_number]
-                    text = page.extract_text() or "No text found on this page."
-                    return text
-                else:
-                    return "Invalid page number."
-        else:
-            return "PDF processing is unavailable or invalid file."
+        import PyPDF2
+        reader = PyPDF2.PdfReader(file)
+        text = "\n".join(page.extract_text() or "" for page in reader.pages)
+        return text if text.strip() else "No text found."
+    except ImportError:
+        return "PDF processing is unavailable. Install PyPDF2 for better results."
     except Exception as e:
         return f"Error extracting text: {e}"
-
-# Function to extract images from a specific PDF page
-def extract_images_from_page(file, page_number):
-    images = []
-    try:
-        if PDF_AVAILABLE:
-            with pdfplumber.open(file) as pdf:
-                if page_number < len(pdf.pages):
-                    page = pdf.pages[page_number]
-                    for img in page.images:
-                        image = page.to_image()
-                        images.append(image.original)
-    except Exception as e:
-        st.error(f"Error extracting images: {e}")
-    return images
 
 # Function to apply image transformations
 def process_image(image, mode):
@@ -69,38 +36,15 @@ def verify_certificate(extracted_text, reference_text):
     if extracted_text.strip() == "":
         return "No text detected. Unable to verify."
     similarity = difflib.SequenceMatcher(None, extracted_text.lower(), reference_text.lower()).ratio()
-    if similarity > 0.85:
-        return "✅ Certificate is Original"
-    else:
-        return "❌ Certificate is Fake or Mismatched!"
+    return "✅ Certificate is Original" if similarity > 0.85 else "❌ Certificate is Fake or Mismatched!"
 
 # Streamlit UI
 st.title("📜 Certificate & Document Verification Tool")
 
 uploaded_file = st.file_uploader("Upload a PDF", type=["pdf"])
 if uploaded_file:
-    # Extract total pages
-    with pdfplumber.open(uploaded_file) as pdf:
-        total_pages = len(pdf.pages)
-    
-    st.subheader("Select Page for Verification")
-    page_number = st.number_input("Page Number", min_value=0, max_value=total_pages - 1, value=0)
-    
-    extracted_text = extract_text_from_page(uploaded_file, page_number)
-    st.text_area("Extracted Text from Page", extracted_text, height=200)
-    
-    images = extract_images_from_page(uploaded_file, page_number)
-    if images:
-        st.subheader("Extracted Images from Page")
-        selected_image = st.selectbox("Select an Image to Process", range(len(images)))
-        image = images[selected_image]
-        st.image(image, caption="Original Image", use_column_width=True)
-        
-        mode = st.selectbox("Select Image Processing Mode", ["Original", "Grayscale", "Edge Detection", "Color Inversion"])
-        processed_img = process_image(image, mode)
-        st.image(processed_img, caption=f"{mode} Output", use_column_width=True)
-    else:
-        st.write("No images found on this page.")
+    extracted_text = extract_text_from_pdf(uploaded_file)
+    st.text_area("Extracted Text from PDF", extracted_text, height=200)
     
     doc_type = st.radio("Select Document Type", ["General Document", "Certificate Verification"])
     if doc_type == "General Document":
