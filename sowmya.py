@@ -1,24 +1,24 @@
 import streamlit as st
-import cv2
 import numpy as np
 import pytesseract
-from PIL import Image
+from PIL import Image, ImageOps
 import difflib
 from skimage.filters import sobel
 
-# Set Tesseract path if needed (Modify for your system)
-# pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
-
 # Function to process image
 def process_image(image, mode):
-    img = np.array(image)
+    img = ImageOps.grayscale(image)  # Convert to grayscale using PIL
+    img_array = np.array(img)  # Convert to numpy array for processing
+    
     if mode == "Grayscale":
-        return cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+        return img
     elif mode == "Edge Detection":
-        return sobel(cv2.cvtColor(img, cv2.COLOR_RGB2GRAY))
+        edges = sobel(img_array)
+        return Image.fromarray((edges * 255).astype(np.uint8))  # Normalize and convert back to image
     elif mode == "Color Inversion":
-        return cv2.bitwise_not(img)
-    return img
+        inverted_img = ImageOps.invert(image.convert("RGB"))
+        return inverted_img
+    return image
 
 # Function to extract text
 def extract_text(image):
@@ -33,7 +33,7 @@ def compare_text(original, modified):
 # Streamlit UI
 st.title("📄 Digital Document Authenticator and Verification Tool")
 
-uploaded_file = st.file_uploader("Upload a document (Image/PDF)", type=["png", "jpg", "jpeg", "pdf"])
+uploaded_file = st.file_uploader("Upload a document (Image/PDF)", type=["png", "jpg", "jpeg"])
 
 if uploaded_file:
     image = Image.open(uploaded_file)
@@ -42,7 +42,7 @@ if uploaded_file:
     # Image Processing Options
     mode = st.selectbox("Select Image Processing Mode", ["Original", "Grayscale", "Edge Detection", "Color Inversion"])
     processed_img = process_image(image, mode)
-    st.image(processed_img, caption=f"{mode} Output", use_column_width=True, clamp=True)
+    st.image(processed_img, caption=f"{mode} Output", use_column_width=True)
     
     # Text Extraction and Authentication
     extracted_text = extract_text(image)
