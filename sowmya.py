@@ -14,15 +14,16 @@ except ImportError:
 def extract_text(file):
     text = ""
     try:
-        if file.name.endswith(".pdf") and PDF_AVAILABLE:
-            with pdfplumber.open(file) as pdf:
-                text = "\n".join(page.extract_text() or "" for page in pdf.pages)
-                
-                # If no text is found, notify the user
-                if not text.strip():
-                    return "No extractable text found in the PDF."
+        if file.name.endswith(".pdf"):
+            if PDF_AVAILABLE:
+                with pdfplumber.open(file) as pdf:
+                    text = "\n".join(page.extract_text() or "" for page in pdf.pages)
+                    if not text.strip():
+                        return "No extractable text found in the PDF."
+            else:
+                return "PDF processing is unavailable. Install pdfplumber for better results."
         else:
-            return "Unsupported file type or missing required libraries."
+            return "Unsupported file type. Please upload a PDF."
     except Exception as e:
         return f"Error extracting text: {e}"
     return text
@@ -39,9 +40,9 @@ def verify_certificate(extracted_text, reference_text):
         return "No text detected. Unable to verify."
     similarity = difflib.SequenceMatcher(None, extracted_text.lower(), reference_text.lower()).ratio()
     if similarity > 0.85:
-        return "✅ Certificate is Original"
+        return "Yes Certificate is Original"
     else:
-        return "❌ Certificate is Fake or Mismatched!"
+        return "No Certificate is Fake or Mismatched!"
 
 # Streamlit UI
 st.title("📜 Certificate & Document Verification Tool")
