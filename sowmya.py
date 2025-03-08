@@ -2,18 +2,22 @@ import streamlit as st
 import numpy as np
 from PIL import Image, ImageOps, ImageFilter
 import difflib
+try:
+    import pdfplumber
+except ImportError:
+    pdfplumber = None
 
-# Function to extract text from a PDF (Basic Extraction)
+# Function to extract text from a PDF and split into pages
 def extract_text_from_pdf(file):
-    try:
-        import PyPDF2
-        reader = PyPDF2.PdfReader(file)
-        text = "\n".join(page.extract_text() or "" for page in reader.pages)
-        return text if text.strip() else "No text found."
-    except ImportError:
-        return "PDF processing is unavailable. Install PyPDF2 for better results."
-    except Exception as e:
-        return f"Error extracting text: {e}"
+    if pdfplumber:
+        try:
+            with pdfplumber.open(file) as pdf:
+                pages = [page.extract_text() or "" for page in pdf.pages]
+                return pages if any(p.strip() for p in pages) else ["No text found."]
+        except Exception as e:
+            return [f"Error extracting text: {e}"]
+    else:
+        return ["PDF processing is unavailable. Install pdfplumber for better results."]
 
 # Function to apply image transformations
 def process_image(image, mode):
@@ -43,19 +47,24 @@ st.title("📜 Certificate & Document Verification Tool")
 
 uploaded_file = st.file_uploader("Upload a PDF", type=["pdf"])
 if uploaded_file:
-    extracted_text = extract_text_from_pdf(uploaded_file)
-    st.text_area("Extracted Text from PDF", extracted_text, height=200)
-    
-    doc_type = st.radio("Select Document Type", ["General Document", "Certificate Verification"])
-    if doc_type == "General Document":
-        reference_text = st.text_area("Paste Original Text for Verification", height=200)
-        if st.button("Check for Tampering"):
-            differences = highlight_differences(reference_text, extracted_text)
-            st.subheader("Detected Changes")
-            st.text_area("Highlighted Differences", differences, height=200)
+    pages_text = extract_text_from_pdf(uploaded_file)
+    if isinstance(pages_text, list):
+        selected_page = st.selectbox("Select Page for Verification", range(1, len(pages_text) + 1))
+        extracted_text = pages_text[selected_page - 1]
+        st.text_area(f"Extracted Text from Page {selected_page}", extracted_text, height=200)
+        
+        doc_type = st.radio("Select Document Type", ["General Document", "Certificate Verification"])
+        if doc_type == "General Document":
+            reference_text = st.text_area("Paste Original Text for Verification", height=200)
+            if st.button("Check for Tampering"):
+                differences = highlight_differences(reference_text, extracted_text)
+                st.subheader("Detected Changes")
+                st.text_area("Highlighted Differences", differences, height=200)
+        else:
+            reference_certificate_text = st.text_area("Paste Expected Certificate Details", height=200)
+            if st.button("Verify Certificate"):
+                verification_result = verify_certificate(extracted_text, reference_certificate_text)
+                st.subheader("Verification Result")
+                st.write(verification_result)
     else:
-        reference_certificate_text = st.text_area("Paste Expected Certificate Details", height=200)
-        if st.button("Verify Certificate"):
-            verification_result = verify_certificate(extracted_text, reference_certificate_text)
-            st.subheader("Verification Result")
-            st.write(verification_result)
+        st.error(pages_text[0])
