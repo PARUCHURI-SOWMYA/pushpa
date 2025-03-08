@@ -1,6 +1,6 @@
 import streamlit as st
 import numpy as np
-from PIL import Image, ImageOps
+from PIL import Image, ImageOps, ImageFilter
 import difflib
 
 # Try importing PDF library
@@ -17,31 +17,30 @@ try:
 except ImportError:
     OCR_AVAILABLE = False
 
-# Function to extract text from PDF
-def extract_text(file):
-    text = ""
+# Function to extract text from a specific PDF page
+def extract_text_from_page(file, page_number):
     try:
-        if file.name.endswith(".pdf"):
-            if PDF_AVAILABLE:
-                with pdfplumber.open(file) as pdf:
-                    text = "\n".join(page.extract_text() or "" for page in pdf.pages)
-                    if not text.strip():
-                        return "No extractable text found in the PDF."
-            else:
-                return "PDF processing is unavailable. Install pdfplumber for better results."
+        if file.name.endswith(".pdf") and PDF_AVAILABLE:
+            with pdfplumber.open(file) as pdf:
+                if page_number < len(pdf.pages):
+                    page = pdf.pages[page_number]
+                    text = page.extract_text() or "No text found on this page."
+                    return text
+                else:
+                    return "Invalid page number."
         else:
-            return "Unsupported file type. Please upload a PDF."
+            return "PDF processing is unavailable or invalid file."
     except Exception as e:
         return f"Error extracting text: {e}"
-    return text
 
-# Function to extract images from PDF
-def extract_images(file):
+# Function to extract images from a specific PDF page
+def extract_images_from_page(file, page_number):
     images = []
     try:
         if PDF_AVAILABLE:
             with pdfplumber.open(file) as pdf:
-                for page in pdf.pages:
+                if page_number < len(pdf.pages):
+                    page = pdf.pages[page_number]
                     for img in page.images:
                         image = page.to_image()
                         images.append(image.original)
@@ -80,13 +79,19 @@ st.title("📜 Certificate & Document Verification Tool")
 
 uploaded_file = st.file_uploader("Upload a PDF", type=["pdf"])
 if uploaded_file:
-    st.subheader("Extracted Text from Document")
-    extracted_text = extract_text(uploaded_file)
-    st.text_area("Extracted Text", extracted_text, height=200)
-
-    images = extract_images(uploaded_file)
+    # Extract total pages
+    with pdfplumber.open(uploaded_file) as pdf:
+        total_pages = len(pdf.pages)
+    
+    st.subheader("Select Page for Verification")
+    page_number = st.number_input("Page Number", min_value=0, max_value=total_pages - 1, value=0)
+    
+    extracted_text = extract_text_from_page(uploaded_file, page_number)
+    st.text_area("Extracted Text from Page", extracted_text, height=200)
+    
+    images = extract_images_from_page(uploaded_file, page_number)
     if images:
-        st.subheader("Extracted Images from Document")
+        st.subheader("Extracted Images from Page")
         selected_image = st.selectbox("Select an Image to Process", range(len(images)))
         image = images[selected_image]
         st.image(image, caption="Original Image", use_column_width=True)
@@ -95,8 +100,8 @@ if uploaded_file:
         processed_img = process_image(image, mode)
         st.image(processed_img, caption=f"{mode} Output", use_column_width=True)
     else:
-        st.write("No images found in the document.")
-
+        st.write("No images found on this page.")
+    
     doc_type = st.radio("Select Document Type", ["General Document", "Certificate Verification"])
     if doc_type == "General Document":
         reference_text = st.text_area("Paste Original Text for Verification", height=200)
