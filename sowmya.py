@@ -67,3 +67,14 @@ if uploaded_file:
             verification_result = verify_certificate(extracted_text, reference_certificate_text)
             st.subheader("Verification Result")
             st.write(verification_result)
+    
+    # Apply transformations to the selected page text
+    if extracted_text.strip():
+        grayscale_text = highlight_differences("", extracted_text.lower())  # Simulated transformation
+        edge_text = highlight_differences("", extracted_text.upper())  # Simulated transformation
+        inverted_text = highlight_differences("", extracted_text[::-1])  # Simulated transformation
+        
+        st.subheader("Text Transformations on Selected Page")
+        st.text_area("Grayscale Text", grayscale_text, height=150)
+        st.text_area("Edge Detection Text", edge_text, height=150)
+        st.text_area("Color Inverted Text", inverted_text, height=150)
