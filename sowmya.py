@@ -48,12 +48,12 @@ def verify_certificate(extracted_text, reference_text):
         return "No text detected. Unable to verify."
     similarity = difflib.SequenceMatcher(None, extracted_text.lower(), reference_text.lower()).ratio()
     if similarity > 0.85:
-        return "✅ Certificate is Original"
+        return "Certificate is Original"
     else:
-        return "❌ Certificate is Fake or Mismatched!"
+        return "Certificate is Fake or Mismatched!"
 
 # Streamlit UI
-st.title("📜 Certificate & Document Verification Tool")
+st.title("Digital Document Verification Tool")
 
 uploaded_file = st.file_uploader("Upload a PDF or Image", type=["pdf", "png", "jpg", "jpeg"])
 if uploaded_file:
