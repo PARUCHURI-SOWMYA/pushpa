@@ -11,7 +11,7 @@ except ImportError:
     OCR_AVAILABLE = False
 
 try:
-    import PyPDF2  # Replacing fitz with PyPDF2 for PDF processing
+    import pdfplumber
     PDF_AVAILABLE = True
 except ImportError:
     PDF_AVAILABLE = False
@@ -20,12 +20,9 @@ except ImportError:
 def extract_text(file):
     text = ""
     try:
-        if file.name.endswith(".pdf"):
-            if PDF_AVAILABLE:
-                pdf_reader = PyPDF2.PdfReader(file)
-                text = "\n".join(page.extract_text() for page in pdf_reader.pages if page.extract_text())
-            else:
-                st.warning("PDF processing not available. Install PyPDF2 for better results.")
+        if file.name.endswith(".pdf") and PDF_AVAILABLE:
+            with pdfplumber.open(file) as pdf:
+                text = "\n".join(page.extract_text() or "" for page in pdf.pages)
         else:
             image = Image.open(file)
             if OCR_AVAILABLE:
