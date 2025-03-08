@@ -1,39 +1,40 @@
 import streamlit as st
 import numpy as np
-from PIL import Image, ImageOps, ImageFilter
+from PIL import Image, ImageOps
 import difflib
+
+# Try importing OCR and PDF libraries
 try:
-    import pdfplumber
+    import pytesseract
+    OCR_AVAILABLE = True
 except ImportError:
-    pdfplumber = None
+    OCR_AVAILABLE = False
 
 try:
-    from pdf2image import convert_from_bytes
+    import PyPDF2  # Replacing fitz with PyPDF2 for PDF processing
+    PDF_AVAILABLE = True
 except ImportError:
-    convert_from_bytes = None
+    PDF_AVAILABLE = False
 
-# Function to extract text from a PDF and split into pages
-def extract_text_from_pdf(file):
-    if pdfplumber:
-        with pdfplumber.open(file) as pdf:
-            return [page.extract_text() or "" for page in pdf.pages]
-    return []
-
-# Function to extract images from a PDF page
-def extract_images_from_pdf(file):
-    if convert_from_bytes:
-        return convert_from_bytes(file.read(), fmt='png')
-    return []
-
-# Function to apply image transformations
-def process_image(image, mode):
-    if mode == "Grayscale":
-        return ImageOps.grayscale(image)
-    elif mode == "Edge Detection":
-        return image.convert("L").filter(ImageFilter.FIND_EDGES)
-    elif mode == "Color Inversion":
-        return ImageOps.invert(image.convert("RGB"))
-    return image
+# Function to extract text from PDF or Image
+def extract_text(file):
+    text = ""
+    try:
+        if file.name.endswith(".pdf"):
+            if PDF_AVAILABLE:
+                pdf_reader = PyPDF2.PdfReader(file)
+                text = "\n".join(page.extract_text() for page in pdf_reader.pages if page.extract_text())
+            else:
+                st.warning("PDF processing not available. Install PyPDF2 for better results.")
+        else:
+            image = Image.open(file)
+            if OCR_AVAILABLE:
+                text = pytesseract.image_to_string(image)
+            else:
+                st.warning("OCR (Tesseract) not available. Text extraction may not work.")
+    except Exception as e:
+        st.error(f"Error extracting text: {e}")
+    return text
 
 # Function to compare text and highlight differences
 def highlight_differences(original, extracted):
@@ -46,31 +47,20 @@ def verify_certificate(extracted_text, reference_text):
     if extracted_text.strip() == "":
         return "No text detected. Unable to verify."
     similarity = difflib.SequenceMatcher(None, extracted_text.lower(), reference_text.lower()).ratio()
-    return "✅ Certificate is Original" if similarity > 0.85 else "❌ Certificate is Fake or Mismatched!"
+    if similarity > 0.85:
+        return "✅ Certificate is Original"
+    else:
+        return "❌ Certificate is Fake or Mismatched!"
 
 # Streamlit UI
 st.title("📜 Certificate & Document Verification Tool")
 
-uploaded_file = st.file_uploader("Upload a PDF", type=["pdf"])
+uploaded_file = st.file_uploader("Upload a PDF or Image", type=["pdf", "png", "jpg", "jpeg"])
 if uploaded_file:
-    pages_text = extract_text_from_pdf(uploaded_file)
-    images = extract_images_from_pdf(uploaded_file)
-    
-    if pages_text:
-        selected_page = st.selectbox("Select Page for Verification", range(1, len(pages_text) + 1))
-        extracted_text = pages_text[selected_page - 1]
-        st.text_area(f"Extracted Text from Page {selected_page}", extracted_text, height=200)
-    
-    if images:
-        selected_image = images[selected_page - 1] if selected_page <= len(images) else None
-        if selected_image:
-            st.image(selected_image, caption=f"Page {selected_page} Image", use_container_width=True)
-            
-            # Image Processing Options
-            mode = st.selectbox("Select Image Processing Mode", ["Original", "Grayscale", "Edge Detection", "Color Inversion"])
-            processed_image = process_image(selected_image, mode)
-            st.image(processed_image, caption=f"{mode} Output", use_container_width=True)
-    
+    st.subheader("Extracted Text from Document")
+    extracted_text = extract_text(uploaded_file)
+    st.text_area("Extracted Text", extracted_text, height=200)
+
     doc_type = st.radio("Select Document Type", ["General Document", "Certificate Verification"])
     if doc_type == "General Document":
         reference_text = st.text_area("Paste Original Text for Verification", height=200)
@@ -84,14 +74,3 @@ if uploaded_file:
             verification_result = verify_certificate(extracted_text, reference_certificate_text)
             st.subheader("Verification Result")
             st.write(verification_result)
-    
-    # Apply transformations to the selected page text
-    if extracted_text.strip():
-        grayscale_text = highlight_differences("", extracted_text.lower())  # Simulated transformation
-        edge_text = highlight_differences("", extracted_text.upper())  # Simulated transformation
-        inverted_text = highlight_differences("", extracted_text[::-1])  # Simulated transformation
-        
-        st.subheader("Text Transformations on Selected Page")
-        st.text_area("Grayscale Text", grayscale_text, height=150)
-        st.text_area("Edge Detection Text", edge_text, height=150)
-        st.text_area("Color Inverted Text", inverted_text, height=150)
