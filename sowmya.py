@@ -17,7 +17,7 @@ def extract_text_from_pdf(file):
         except Exception as e:
             return [f"Error extracting text: {e}"]
     else:
-        return ["PDF processing is unavailable. Install pdfplumber for better results."]
+        return ["PDF processing is unavailable."]
 
 # Function to apply image transformations
 def process_image(image, mode):
@@ -52,6 +52,12 @@ if uploaded_file:
         selected_page = st.selectbox("Select Page for Verification", range(1, len(pages_text) + 1))
         extracted_text = pages_text[selected_page - 1]
         st.text_area(f"Extracted Text from Page {selected_page}", extracted_text, height=200)
+        
+        # Image Processing Options
+        mode = st.selectbox("Select Image Processing Mode", ["Original", "Grayscale", "Edge Detection", "Color Inversion"])
+        image = Image.new('RGB', (400, 300), (255, 255, 255))  # Placeholder image
+        processed_image = process_image(image, mode)
+        st.image(processed_image, caption=f"{mode} Output", use_column_width=True)
         
         doc_type = st.radio("Select Document Type", ["General Document", "Certificate Verification"])
         if doc_type == "General Document":
