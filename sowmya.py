@@ -2,7 +2,7 @@ import streamlit as st
 import numpy as np
 import tempfile
 import os
-from PIL import Image, ImageOps, ImageFilter
+from PIL import Image, ImageOps, ImageFilter, ImageChops
 import io
 
 def process_image(image):
@@ -11,6 +11,12 @@ def process_image(image):
     edges = gray.filter(ImageFilter.FIND_EDGES)
     inverted = ImageOps.invert(image.convert("RGB"))
     return gray, edges, inverted
+
+def compare_certificates(reference, uploaded):
+    """Compare the uploaded certificate with the reference template."""
+    ref_resized = reference.resize(uploaded.size)
+    diff = ImageChops.difference(ref_resized, uploaded)
+    return diff
 
 def extract_images_from_pdf(file):
     """Extract images from a PDF file using only PIL without external dependencies."""
@@ -25,30 +31,28 @@ def extract_images_from_pdf(file):
     return pages
 
 def main():
-    st.title("Digital Document Authentication and Verification Tool")
-    uploaded_file = st.file_uploader("Upload a PDF Document", type=["pdf"])
+    st.title("Digital Certificate Authentication and Verification Tool")
+    reference_file = st.file_uploader("Upload Reference Certificate (Image)", type=["png", "jpg", "jpeg"])
+    uploaded_file = st.file_uploader("Upload Certificate to Verify (PDF or Image)", type=["pdf", "png", "jpg", "jpeg"])
     
-    if uploaded_file is not None:
-        pages = extract_images_from_pdf(io.BytesIO(uploaded_file.read()))
+    if reference_file and uploaded_file:
+        reference = Image.open(reference_file).convert("RGB")
         
-        if pages:
-            page_options = list(range(1, len(pages) + 1))
-            selected_page = st.selectbox("Select a page to verify:", page_options)
-            image = pages[selected_page - 1]
-            
-            st.image(image, caption=f"Original Page {selected_page}", use_column_width=True)
-            
-            gray, edges, inverted = process_image(image)
-            
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.image(gray, caption="Grayscale", use_column_width=True)
-            with col2:
-                st.image(edges, caption="Edge Detection", use_column_width=True)
-            with col3:
-                st.image(inverted, caption="Color Inversion", use_column_width=True)
-            
-            st.success("Page verification completed! Check the visual indicators for tampering detection.")
+        if uploaded_file.name.endswith("pdf"):
+            pages = extract_images_from_pdf(io.BytesIO(uploaded_file.read()))
+            if pages:
+                uploaded_image = pages[0]  # Assume first page is the certificate
+            else:
+                st.error("Failed to extract image from PDF.")
+                return
+        else:
+            uploaded_image = Image.open(uploaded_file).convert("RGB")
+        
+        st.image(uploaded_image, caption="Uploaded Certificate", use_column_width=True)
+        diff = compare_certificates(reference, uploaded_image)
+        
+        st.image(diff, caption="Differences Highlighted", use_column_width=True)
+        st.success("Certificate verification completed! Check for any highlighted differences.")
 
 if __name__ == "__main__":
     main()
