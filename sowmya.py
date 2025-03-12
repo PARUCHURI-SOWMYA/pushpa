@@ -49,6 +49,12 @@ def main():
         
         st.image(uploaded_image, caption="Uploaded Certificate", use_column_width=True)
         
+        # Process the image and display grayscale, edge, and inverted versions
+        gray, edges, inverted = process_image(uploaded_image)
+        st.image(gray, caption="Grayscale Certificate", use_column_width=True)
+        st.image(edges, caption="Edge Detection Output", use_column_width=True)
+        st.image(inverted, caption="Inverted Colors Output", use_column_width=True)
+        
         if reference_text:
             text_found = check_text_in_image(uploaded_image, reference_text)
             if text_found:
