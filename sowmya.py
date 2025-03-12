@@ -1,73 +1,61 @@
 import streamlit as st
-import os
 import cv2
 import numpy as np
-import pytesseract
-from pdf2image import convert_from_path
+import tempfile
+import os
 from PIL import Image
+import fitz  # PyMuPDF
 
-# Set up the upload folder
-UPLOAD_FOLDER = "uploads"
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-
-def convert_pdf_to_images(pdf_path):
-    """Convert PDF pages to images and return their file paths."""
-    images = convert_from_path(pdf_path)
-    image_paths = []
-    for i, image in enumerate(images):
-        image_path = os.path.join(UPLOAD_FOLDER, f'page_{i + 1}.png')
-        image.save(image_path, 'PNG')
-        image_paths.append(image_path)
-    return image_paths
-
-def process_image(image_path):
-    """Apply grayscale, edge detection, and color inversion."""
-    image = cv2.imread(image_path)
-    grayscale = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    edges = cv2.Canny(grayscale, 100, 200)
+def process_image(image):
+    """Process the image to generate grayscale, edge detection, and color inversion outputs."""
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    edges = cv2.Canny(gray, 100, 200)
     inverted = cv2.bitwise_not(image)
+    return gray, edges, inverted
+
+def load_pdf(file):
+    """Convert uploaded PDF into images, one per page."""
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_pdf:
+        temp_pdf.write(file.read())
+        temp_pdf_path = temp_pdf.name
     
-    return grayscale, edges, inverted
-
-def extract_text(image_path):
-    """Extract text from an image using Tesseract OCR."""
-    image = cv2.imread(image_path)
-    text = pytesseract.image_to_string(image)
-    return text
-
-# Streamlit UI
-st.title("📜 Digital Document Authentication & Verification Tool")
-
-uploaded_file = st.file_uploader("Upload a PDF Document", type=["pdf"])
-
-if uploaded_file is not None:
-    file_path = os.path.join(UPLOAD_FOLDER, uploaded_file.name)
-    with open(file_path, "wb") as f:
-        f.write(uploaded_file.getbuffer())
+    doc = fitz.open(temp_pdf_path)
+    pages = []
+    for page in doc:
+        pix = page.get_pixmap()
+        img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+        pages.append(img)
     
-    st.success("File uploaded successfully!")
+    doc.close()
+    os.unlink(temp_pdf_path)  # Cleanup temporary file
+    return pages
+
+def main():
+    st.title("Digital Document Authentication and Verification Tool")
+    uploaded_file = st.file_uploader("Upload a PDF Document", type=["pdf"])
     
-    # Convert PDF to images
-    page_images = convert_pdf_to_images(file_path)
-    if page_images:
-        selected_page = st.selectbox("Select a page to verify:", [f"Page {i+1}" for i in range(len(page_images))])
-        page_index = int(selected_page.split()[1]) - 1
-        selected_page_path = page_images[page_index]
+    if uploaded_file is not None:
+        pages = load_pdf(uploaded_file)
         
-        # Display original page
-        st.image(selected_page_path, caption="Original Document Page", use_column_width=True)
-        
-        # Process selected page
-        grayscale, edges, inverted = process_image(selected_page_path)
-        
-        # Display processed images
-        st.image(grayscale, caption="Grayscale Version", use_column_width=True)
-        st.image(edges, caption="Edge Detection", use_column_width=True)
-        st.image(inverted, caption="Color Inversion", use_column_width=True)
-        
-        # Extract and verify text
-        extracted_text = extract_text(selected_page_path)
-        st.subheader("Extracted Text:")
-        st.text_area("", extracted_text, height=150)
-        
-        st.success("Processing complete! Verify the extracted text and image variations for tampering detection.")
+        if pages:
+            page_options = list(range(1, len(pages) + 1))
+            selected_page = st.selectbox("Select a page to verify:", page_options)
+            image = np.array(pages[selected_page - 1])
+            image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+            
+            st.image(pages[selected_page - 1], caption=f"Original Page {selected_page}", use_column_width=True)
+            
+            gray, edges, inverted = process_image(image)
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.image(gray, caption="Grayscale", use_column_width=True, channels="GRAY")
+            with col2:
+                st.image(edges, caption="Edge Detection", use_column_width=True, channels="GRAY")
+            with col3:
+                st.image(inverted, caption="Color Inversion", use_column_width=True)
+            
+            st.success("Page verification completed! Check the visual indicators for tampering detection.")
+
+if __name__ == "__main__":
+    main()
