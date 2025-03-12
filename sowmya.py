@@ -2,8 +2,8 @@ import streamlit as st
 import numpy as np
 import tempfile
 import os
-from PIL import Image, ImageOps
-import fitz  # PyMuPDF
+from PIL import Image, ImageOps, ImageFilter
+import pdf2image  # Alternative to PyMuPDF
 
 def process_image(image):
     """Process the image to generate grayscale, edge detection, and color inversion outputs."""
@@ -18,14 +18,7 @@ def load_pdf(file):
         temp_pdf.write(file.read())
         temp_pdf_path = temp_pdf.name
     
-    doc = fitz.open(temp_pdf_path)
-    pages = []
-    for page in doc:
-        pix = page.get_pixmap()
-        img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-        pages.append(img)
-    
-    doc.close()
+    pages = pdf2image.convert_from_path(temp_pdf_path)
     os.unlink(temp_pdf_path)  # Cleanup temporary file
     return pages
 
