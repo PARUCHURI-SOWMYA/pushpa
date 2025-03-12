@@ -3,7 +3,7 @@ import numpy as np
 import tempfile
 import os
 from PIL import Image, ImageOps, ImageFilter
-import pdf2image  # Alternative to PyMuPDF
+import io
 
 def process_image(image):
     """Process the image to generate grayscale, edge detection, and color inversion outputs."""
@@ -12,14 +12,16 @@ def process_image(image):
     inverted = ImageOps.invert(image.convert("RGB"))
     return gray, edges, inverted
 
-def load_pdf(file):
-    """Convert uploaded PDF into images, one per page."""
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_pdf:
-        temp_pdf.write(file.read())
-        temp_pdf_path = temp_pdf.name
-    
-    pages = pdf2image.convert_from_path(temp_pdf_path)
-    os.unlink(temp_pdf_path)  # Cleanup temporary file
+def extract_images_from_pdf(file):
+    """Extract images from a PDF file using only PIL without external dependencies."""
+    pages = []
+    try:
+        with Image.open(file) as img:
+            for i in range(img.n_frames):
+                img.seek(i)
+                pages.append(img.copy())
+    except Exception as e:
+        st.error(f"Error processing PDF: {e}")
     return pages
 
 def main():
@@ -27,7 +29,7 @@ def main():
     uploaded_file = st.file_uploader("Upload a PDF Document", type=["pdf"])
     
     if uploaded_file is not None:
-        pages = load_pdf(uploaded_file)
+        pages = extract_images_from_pdf(io.BytesIO(uploaded_file.read()))
         
         if pages:
             page_options = list(range(1, len(pages) + 1))
