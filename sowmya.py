@@ -38,7 +38,7 @@ def check_text_in_image(image, reference_text):
     return text_found
 
 def main():
-    st.title("Digital Certificate Authentication and Verification Tool")
+    st.title("Digital Document Authentication and Verification Tool")
     uploaded_file = st.file_uploader("Upload Certificate to Verify (PDF or Image)", type=["pdf", "png", "jpg", "jpeg"])
     reference_text = st.text_area("Enter Reference Text for Verification")
     
